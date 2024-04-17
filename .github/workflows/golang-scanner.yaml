@@ -1,0 +1,52 @@
+name: GO Security Checks
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+
+jobs:
+  # Job for running govulncheck https://github.com/golang/govulncheck-action
+  govulncheck_job:
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SAST_SECURITY_SLACK_WEBHOOK}}
+      SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      GVC_PR_URL: ${{ github.event.pull_request.html_url }}
+      GVC_PR_CREATOR: ${{ github.event.pull_request.user.login }}
+      GVC_HEAD_COMMIT: ${{ github.event.pull_request.html_url }}/commits/${{ github.event.pull_request.head.sha }}
+      GVC_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      GVC_SENDER: ${{ github.event.sender.login }}
+
+    runs-on: ubuntu-latest
+    name: Run govulncheck
+    steps:
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@7da72f730e37eeaad891fcff0a532d27ed737cd4
+        with:
+          go-version-file: ./go.mod
+          go-package: ./...
+
+      - name: Send Slack Notification
+        if: failure()
+        uses: slackapi/slack-github-action@6c661ce58804a1a20f6dc5fbee7f0381b469e001 # v1.25.0
+        with:
+          # For posting a rich message using Block Kit
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":red-alert: *Govulncheck Scan Failed*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "`Workflow Run:` ${{ env.GVC_WORKFLOW_RUN_URL }}\n\n`Pull Request:` ${{ env.GVC_PR_URL }}\n\n`Head Commit:` ${{ env.GVC_HEAD_COMMIT }}\n\n`PR Creator:` *${{ env.GVC_PR_CREATOR }}*\n\n`Latest Committer:` *${{ env.GVC_SENDER }}*\n\n"
+                  }
+                }
+              ]
+            }
